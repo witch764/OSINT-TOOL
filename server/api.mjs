@@ -10,6 +10,7 @@ import { update } from "./store.mjs";
 import { runSearch, validateSearch } from "./search.mjs";
 import { TOOL_GROUPS, TOOLS, toolAvailable } from "./catalog.mjs";
 import { validateRobloxScan } from "./roblox-scan.mjs";
+import { supportsIndicia, verifyIndicia, searchIndicia } from "./indicia.mjs";
 
 const scrypt = promisify(rawScrypt);
 export const PACKAGES = [
@@ -129,6 +130,10 @@ function newUser(name, password = null, role = "member") {
 }
 
 export function createApi({ store, search = runSearch, env = process.env }) {
+  async function indiciaKey() {
+    const saved = (await store.read('settings/indicia'))?.data;
+    return saved ? saved.apiKey : env.INDICIA_API_KEY || '';
+  }
   async function session(request) {
     const token = request.headers
       .get("cookie")
@@ -173,13 +178,15 @@ export function createApi({ store, search = runSearch, env = process.env }) {
           fail(403, "Cross-site request blocked.");
       }
       const ip = context.ip || "local";
-      if (path === "/api/config" && method === "GET")
+      if (path === "/api/config" && method === "GET") {
+        const connected = Boolean(await indiciaKey());
         return json({
           toolGroups: TOOL_GROUPS.map((g) => ({
             ...g,
             tools: g.tools.map((t) => ({
               ...t,
               available: toolAvailable(t, env),
+              indiciaAvailable: connected && supportsIndicia(t.id),
             })),
           })),
           packages: PACKAGES,
@@ -187,6 +194,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
           webSearch: true,
           accessCodes: Boolean(env.OWNER_ACCESS_CODE || env.SLIT_ACCESS_CODE),
         });
+      }
       if (
         ["/api/auth/signup", "/api/auth/login", "/api/auth/code"].includes(
           path,
@@ -262,6 +270,21 @@ export function createApi({ store, search = runSearch, env = process.env }) {
       }
       if (path === "/api/auth/me" && method === "GET")
         return json({ user: publicUser(account) });
+      if (path === '/api/owner/indicia') {
+        if (account.role !== 'owner') fail(403, 'Only the creator can manage provider connections.');
+        if (method === 'GET') return json({ connected: Boolean(await indiciaKey()) });
+        await rate(store, `indicia-settings:${account.username}`, 10, 60000);
+        const input = await body(request);
+        if (input.disconnect === true) {
+          await update(store, 'settings/indicia', () => ({ apiKey: '' }));
+          return json({ connected: false });
+        }
+        let status;
+        try { status = await verifyIndicia(input.apiKey); }
+        catch { fail(400, 'Indicia could not verify this key. Check the key and try again.'); }
+        await update(store, 'settings/indicia', () => ({ apiKey: input.apiKey, updatedAt: new Date().toISOString() }));
+        return json(status);
+      }
       if (path === "/api/auth/logout" && method === "POST") {
         await update(store, sessionKey, (current) => ({
           ...current,
@@ -302,6 +325,14 @@ export function createApi({ store, search = runSearch, env = process.env }) {
           fail(503, "This tool needs a provider connection before it can run.");
         if (tool && tool.mode !== input.mode)
           fail(400, "Search type does not match this tool.");
+        if (input.provider !== undefined && !['public', 'indicia'].includes(input.provider)) fail(400, 'Choose a supported provider.');
+        const useIndicia = input.provider === 'indicia';
+        let providerKey;
+        if (useIndicia) {
+          if (!tool || !supportsIndicia(tool.id)) fail(400, 'Indicia is not connected for this tool.');
+          providerKey = await indiciaKey();
+          if (!providerKey) fail(503, 'The creator must connect Indicia first.');
+        }
         let query;
         let options;
         if (input.mode === 'roblox-batch' && tool?.id !== 'roblox-scraper') fail(400, 'Choose the Roblox Profile Scraper to run a batch scan.');
@@ -342,6 +373,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
             id,
             mode: input.mode,
             toolId: tool?.id,
+            ...(useIndicia ? { provider: 'indicia' } : {}),
             query,
             ...(options ? { options } : {}),
             createdAt: timestamp,
@@ -355,7 +387,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         let sources = [];
         let failed = false;
         try {
-          sources = await search(input.mode, query, env, tool, options);
+          sources = useIndicia ? await searchIndicia(tool.id, query, providerKey) : await search(input.mode, query, env, tool, options);
           failed =
             !sources.length || sources.every((s) => s.status === "unavailable");
         } catch {

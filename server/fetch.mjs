@@ -1,9 +1,9 @@
 // Requests in provider adapters use fixed, trusted endpoints. Arbitrary URLs use resolve.mjs.
-export async function text(url, options = {}, limit = 1_000_000) {
+export async function text(url, options = {}, limit = 1_000_000, timeoutMs = 8000) {
   const response = await fetch(url, {
     ...options,
     redirect: 'error',
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: { Accept: 'application/json', 'User-Agent': 'WitchSearch/1.0 (public-source-research)', ...options.headers },
   });
   if (response.status === 404) return null;
@@ -22,8 +22,8 @@ export async function text(url, options = {}, limit = 1_000_000) {
   } finally { await reader.cancel(); }
   return Buffer.concat(chunks).toString();
 }
-export async function json(url, options, limit) {
-  const body = await text(url, options, limit);
+export async function json(url, options, limit, timeoutMs) {
+  const body = await text(url, options, limit, timeoutMs);
   return body === null ? null : JSON.parse(body);
 }
 const short = value => value == null ? 'Not published' : String(value).slice(0, 1500);

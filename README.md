@@ -126,3 +126,11 @@ The Roblox Profile Scraper has its own ID-range form: starting ID, amount, comma
 Other connected tools show the input appropriate to their implemented public adapter (domain, CVE, Bitcoin address, Steam ID, Discord invite, and so on). Social web tools search indexed public pages; they are not native private-account lookups.
 
 The supplied IntelX screenshots show storage IDs, provider-specific buckets, and stealer-log archives. Those require an authorized IntelX service integration and are not available through the current public-source implementation. No fake buckets or successful downloads are shown. Stolen-credential archives and Discord verification bypass are not implemented. Locked tools do not charge credits.
+
+## Optional Indicia connection
+
+The creator can open **Account settings → Indicia connection** to save or replace a key. It is verified server-side and stored in private Netlify Blobs (or the private local development store); responses never include it. Disconnecting removes the stored credential and disables the optional connection. `INDICIA_API_KEY` is an optional server-only environment fallback; an explicit disconnect overrides it. Never use a `VITE_` key or commit a real key.
+
+Connected tools offer an explicit **Use Indicia public data** checkbox: TikTok, Epic Games, PlayStation, Xbox, Steam, IP Info, Whois, Certificate Lookup, URLScan, CVE/KEV, Wayback snapshot listings, and Bitcoin wallet analysis. Public adapters remain the default. Indicia requests use fixed allowlisted endpoints, bounded responses, and no redirects. Provider calls have a 20-second deadline (the existing public adapters retain their 8-second default). Each request checks authenticated provider pricing and proceeds only when that endpoint is quoted at zero credits; changed or missing prices fail closed. The app still charges one WitchSearch credit for a healthy search and refunds total failure. Provider selection persists with saved reports and JSON exports.
+
+The integration is limited to public-data endpoints; it does not connect paid searches, breach/stealer credentials, verification bypass, or file downloads. Wayback never requests paid snapshot content. Real upstream availability varies independently of account permissions. Local unlimited WitchSearch credits do not fund an external provider's paid balance.

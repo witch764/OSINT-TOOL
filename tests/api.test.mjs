@@ -623,3 +623,50 @@ test('batch scan options are validated before spending; normalized filters persi
   assert.equal(history[0].saved,true);
   assert.deepEqual(history[0].options,passedOptions);
 });
+
+test('only creator can store/disconnect Indicia; config and settings never expose its key', async () => {
+  const f=fixture();
+  const key='in_'+'x'.repeat(40);
+  const member=await f.signup();
+  const special=await f.request('/auth/code',{code:env.SLIT_ACCESS_CODE});
+  assert.equal((await f.request('/owner/indicia',undefined,member.cookie)).status,403);
+  assert.equal((await f.request('/owner/indicia',{apiKey:key},special.cookie)).status,403);
+  assert.equal((await f.request('/owner/indicia',{apiKey:key})).status,401);
+  const owner=await f.request('/auth/code',{code:env.OWNER_ACCESS_CODE});
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>new Response(JSON.stringify({success:true,key:{enabled:true},user:{tokens:0}}));
+  try {
+    const r=await f.request('/owner/indicia',{apiKey:key},owner.cookie);
+    assert.equal(r.status,200); assert.equal(r.data.connected,true);
+    assert.equal((await f.store.read('settings/indicia')).data.apiKey,key);
+    for(const data of [r.data,(await f.request('/config')).data,(await f.request('/owner/indicia',undefined,owner.cookie)).data]) assert.ok(!JSON.stringify(data).includes(key));
+    const config=(await f.request('/config')).data;
+    assert.equal(config.toolGroups.flatMap(g=>g.tools).find(t=>t.id==='ip').indiciaAvailable,true);
+    assert.equal(config.toolGroups.flatMap(g=>g.tools).find(t=>t.id==='intelx').indiciaAvailable,false);
+    assert.equal((await f.request('/owner/indicia',{disconnect:true},owner.cookie)).data.connected,false);
+    assert.equal((await f.store.read('settings/indicia')).data.apiKey,'');
+  } finally {globalThis.fetch=original;}
+});
+
+test('Indicia selection is validated before spending; results/selection persist and provider failure refunds', async()=>{
+  const f=fixture(); const member=await f.signup();
+  const request=data=>f.request('/search',{toolId:'ip',mode:'ip',query:'8.8.8.8',provider:'indicia',...data},member.cookie);
+  assert.equal((await request({})).status,503);
+  await update(f.store,'settings/indicia',()=>({apiKey:'in_'+'x'.repeat(40)}));
+  assert.equal((await request({provider:'arbitrary'})).status,400);
+  assert.equal((await request({toolId:'github',mode:'username',query:'octocat'})).status,400);
+  assert.equal((await f.request('/auth/me',undefined,member.cookie)).data.user.credits,5);
+  const original=globalThis.fetch;
+  let fail=false;
+  globalThis.fetch=async url=>new Response(JSON.stringify(url.endsWith('/pricing')?{success:true,prices:{ipinfo:fail?1:0}}:{success:true,data:{ip:'8.8.8.8'}}));
+  try {
+    const r=await request({});
+    assert.equal(r.status,200); assert.equal(r.data.search.status,'complete'); assert.equal(r.data.user.credits,4);
+    assert.equal(r.data.search.provider,'indicia');
+    await f.request('/history/save',{id:r.data.search.id,saved:true},member.cookie);
+    assert.equal((await f.request('/history',undefined,member.cookie)).data.history[0].provider,'indicia');
+    fail=true;
+    const failed=await request({});
+    assert.equal(failed.data.search.status,'failed'); assert.equal(failed.data.user.credits,4);
+  } finally {globalThis.fetch=original;}
+});

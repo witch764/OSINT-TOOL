@@ -34,6 +34,7 @@ export type Search = {
   id: string;
   mode: string;
   toolId?: string;
+  provider?: 'indicia';
   options?: RobloxScanOptions;
   query: string;
   createdAt: string;
@@ -50,6 +51,7 @@ export type Tool = {
   provider?: string;
   description?: string;
   available: boolean;
+  indiciaAvailable?: boolean;
   example?: string;
   placeholder?: string;
   requiredEnv?: string;

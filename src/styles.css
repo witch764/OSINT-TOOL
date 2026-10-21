@@ -2710,3 +2710,12 @@ input::placeholder {
   .scan-filters { gap: 8px; }
   .scan-filters input:not([type=checkbox]) { padding: 0 9px; }
 }
+
+.provider-choice { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: #e5dbf4; font-size: 14px; cursor: pointer; }
+.provider-choice input { accent-color: #ad80f7; width: 18px; height: 18px; flex-shrink: 0; }
+.provider-choice small { display: block; color: #a99bb9; font-size: 11px; line-height: 1.6; margin-top: 3px; }
+.provider-connection { border-top: 1px solid #302737; padding-top: 20px; margin: 20px 0; }
+.provider-connection form { display: grid; gap: 12px; margin: 12px 0; }
+.provider-connection label { font-size: 13px; color: #bcadc9; }
+.provider-connection input { min-width: 0; width: 100%; height: 46px; padding: 0 12px; background: #100d16; color: #eee5f8; border: 1px solid #41324f; border-radius: 9px; }
+.provider-connection input:focus-visible { outline: 2px solid #bc92ff; outline-offset: 2px; }

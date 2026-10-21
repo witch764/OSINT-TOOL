@@ -63,6 +63,7 @@ import { ImageGeo } from "./ImageGeo";
 import { researchLinks } from "./research";
 import { RobloxScanForm, defaultRobloxOptions } from "./RobloxScanForm";
 import { queryField } from "./query-fields";
+import { IndiciaConnection } from "./IndiciaConnection";
 
 const icons: Record<string, typeof SearchIcon> = {
   database: Database,
@@ -458,6 +459,7 @@ function Workspace({
   const [mode, setMode] = useState("username");
   const [query, setQuery] = useState("");
   const [scanOptions, setScanOptions] = useState<RobloxScanOptions>(defaultRobloxOptions);
+  const [useIndicia, setUseIndicia] = useState(false);
   const [history, setHistory] = useState<Search[]>([]);
   const [active, setActive] = useState<Search | null>(null);
   const [busy, setBusy] = useState(false);
@@ -518,6 +520,7 @@ function Workspace({
     setError("");
     setQuery(t.mode === "roblox-batch" ? "1" : "");
     setScanOptions(defaultRobloxOptions);
+    setUseIndicia(false);
     setMobile(false);
   }
   function openReport(h: Search) {
@@ -531,6 +534,7 @@ function Workspace({
     setMode(h.mode);
     setQuery(h.query);
     setScanOptions(h.options || defaultRobloxOptions);
+    setUseIndicia(h.provider === 'indicia');
     setSourceFilter("all");
     setError("");
     setMobile(false);
@@ -547,6 +551,7 @@ function Workspace({
         mode,
         query,
         ...(tool ? { toolId: tool.id } : {}),
+        ...(useIndicia && tool?.indiciaAvailable ? { provider: 'indicia' } : {}),
         ...(mode === "roblox-batch" ? { options: scanOptions } : {}),
       });
       setActive(r.search);
@@ -633,9 +638,10 @@ function Workspace({
         </span>
       </div>
       {tool ? (
-        <p className="tool-description">
-          {tool.description || `Search with ${tool.name}.`}
-        </p>
+        <>
+          <p className="tool-description">{useIndicia && tool.indiciaAvailable ? `Request public ${tool.name} data through Indicia. Availability depends on the provider; no private accounts or credential archives are queried.` : tool.description || `Search with ${tool.name}.`}</p>
+          {tool.indiciaAvailable && <label className="provider-choice"><input type="checkbox" checked={useIndicia} onChange={e=>setUseIndicia(e.target.checked)} disabled={busy} /><span>Use Indicia public data<small>Only endpoints quoted as free by Indicia; 1 WitchSearch credit per search.</small></span></label>}
+        </>
       ) : (
         <div className="search-tabs" role="tablist" aria-label="Search type">
           {modes.map((m) => (
@@ -1083,6 +1089,7 @@ function Workspace({
                         </div>
                       </div>
                       {active.mode === 'roblox-batch' && active.options && <p className="inline-note">Scanned {active.options.count} consecutive IDs starting at {active.query}. Filters: {active.options.keywords || active.options.startsWith || active.options.endsWith || active.options.exactLength ? 'applied to usernames' : 'none'}. Missing directory entries are not proof of deletion.</p>}
+                      {active.provider === 'indicia' && <p className="inline-note">Provider: Indicia public data. Reopening this report restores the provider selection.</p>}
                       <div className="source-statuses">
                         {active.sources.map((s) => (
                           <span
@@ -1534,6 +1541,7 @@ function Workspace({
               Accounts don’t use an email address. Keep your password or access
               code safe; email recovery is unavailable.
             </p>
+            {user.role === 'owner' && <IndiciaConnection />}
             <button className="secondary full" onClick={logout}>
               <LogOut size={16} />
               Log out
