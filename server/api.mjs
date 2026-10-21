@@ -12,6 +12,9 @@ import { TOOL_GROUPS, TOOLS, toolAvailable } from "./catalog.mjs";
 import { validateRobloxScan } from "./roblox-scan.mjs";
 import { supportsIndicia, verifyIndicia, searchIndicia } from "./indicia.mjs";
 
+import { exposureProviders, authorizeExposure, searchExposure } from './exposure.mjs';
+import { isOathnetMode, validateOathnetQuery, authorizeOathnet, approvedOathnetEmails, searchOathnet } from './oathnet.mjs';
+
 const scrypt = promisify(rawScrypt);
 export const PACKAGES = [
   { id: "starter", name: "Starter", credits: 50, price: 5 },
@@ -285,6 +288,13 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         await update(store, 'settings/indicia', () => ({ apiKey: input.apiKey, updatedAt: new Date().toISOString() }));
         return json(status);
       }
+      if (path === '/api/exposure/access' && method === 'GET') {
+        const providers = exposureProviders(env);
+        return json({ configured: providers.some(provider => provider.configured), providers, emails: approvedOathnetEmails(env, account.username) });
+      }
+      if (path === '/api/oathnet/access' && method === 'GET') {
+        return json({ configured: Boolean(env.OATHNET_API_KEY?.trim()), emails: approvedOathnetEmails(env, account.username) });
+      }
       if (path === "/api/auth/logout" && method === "POST") {
         await update(store, sessionKey, (current) => ({
           ...current,
@@ -327,6 +337,10 @@ export function createApi({ store, search = runSearch, env = process.env }) {
           fail(400, "Search type does not match this tool.");
         if (input.provider !== undefined && !['public', 'indicia'].includes(input.provider)) fail(400, 'Choose a supported provider.');
         const useIndicia = input.provider === 'indicia';
+        const useOathnet = isOathnetMode(input.mode);
+        const combinedExposure = input.mode === 'account-exposure';
+        if (combinedExposure && ((tool && tool.id !== 'account-exposure') || useIndicia)) fail(400, 'Choose the account exposure search.');
+        if (useOathnet && (!tool || tool.id !== input.mode || useIndicia)) fail(400, 'Choose the matching OathNet tool.');
         let providerKey;
         if (useIndicia) {
           if (!tool || !supportsIndicia(tool.id)) fail(400, 'Indicia is not connected for this tool.');
@@ -337,15 +351,23 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         let options;
         if (input.mode === 'roblox-batch' && tool?.id !== 'roblox-scraper') fail(400, 'Choose the Roblox Profile Scraper to run a batch scan.');
         try {
-          query = validateSearch(input.mode, input.query);
+          query = useOathnet || combinedExposure ? validateOathnetQuery(combinedExposure ? 'oathnet-exposure' : input.mode, input.query) : validateSearch(input.mode, input.query);
           if (input.mode === 'roblox-batch') options = validateRobloxScan(query, input.options);
         } catch (error) {
           fail(400, error.message);
         }
         if (['virustotal', 'vt-content'].includes(input.mode) && !env.VIRUSTOTAL_API_KEY)
           fail(503, 'Add VIRUSTOTAL_API_KEY in Netlify to connect this provider.');
+        if (input.mode === 'abuseipdb' && !env.ABUSEIPDB_API_KEY?.trim()) fail(503, 'Add ABUSEIPDB_API_KEY in the server environment to connect IP reputation.');
         if (input.mode === 'vt-content' && env.VIRUSTOTAL_INTELLIGENCE_ENABLED !== 'true')
           fail(503, 'VirusTotal Intelligence requires a subscription and VIRUSTOTAL_INTELLIGENCE_ENABLED=true.');
+        if (useOathnet || combinedExposure) {
+          if (combinedExposure) authorizeExposure(env, account.username, query);
+          else authorizeOathnet(env, account.username, input.mode, query);
+          await rate(store, `oathnet:${account.username}`, 5, 60000);
+          await rate(store, `oathnet-ip:${ip}`, 10, 60000);
+          await rate(store, 'oathnet:site', 60, 60000);
+        }
         if (input.mode === 'address') await rate(store, 'provider:nominatim', 1, 1000);
         await rate(store, `search:${account.username}`, 20, 60000);
         const id = randomUUID();
@@ -373,7 +395,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
             id,
             mode: input.mode,
             toolId: tool?.id,
-            ...(useIndicia ? { provider: 'indicia' } : {}),
+            ...(combinedExposure ? { provider: 'combined' } : useOathnet ? { provider: 'oathnet' } : useIndicia ? { provider: 'indicia' } : {}),
             query,
             ...(options ? { options } : {}),
             createdAt: timestamp,
@@ -387,7 +409,9 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         let sources = [];
         let failed = false;
         try {
-          sources = useIndicia ? await searchIndicia(tool.id, query, providerKey) : await search(input.mode, query, env, tool, options);
+          sources = combinedExposure ? await searchExposure(query, env) : useOathnet ? await searchOathnet(input.mode, query, env.OATHNET_API_KEY) : useIndicia ? await searchIndicia(tool.id, query, providerKey) : await search(input.mode, query, env, tool, options);
+          const checkedAt = new Date().toISOString();
+          sources = sources.map(source => ({ ...source, checkedAt }));
           failed =
             !sources.length || sources.every((s) => s.status === "unavailable");
         } catch {

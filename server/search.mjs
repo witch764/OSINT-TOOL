@@ -1,3 +1,4 @@
+import { abuseipdbRecords } from './reputation.mjs';
 import { isIP } from "node:net";
 import { domainToASCII } from "node:url";
 import { json, field, result } from './fetch.mjs';
@@ -7,7 +8,7 @@ import { publicUrl } from './resolve.mjs';
 import { scanRoblox, validateRobloxScan } from './roblox-scan.mjs';
 
 export const MODES = [
-  "username", "roblox-batch",
+  "username", "roblox-batch", "abuseipdb",
   "email",
   "domain",
   "ip",
@@ -78,7 +79,7 @@ export function validateSearch(mode, value) {
     if (!phone?.isValid()) throw new Error('Enter a valid phone number with country code, for example +1 202 555 0123.');
     return phone.number;
   }
-  if (mode === 'shodan') return validateSearch('ip', query);
+  if (['shodan', 'abuseipdb'].includes(mode)) return validateSearch('ip', query);
   if (mode === 'link') return publicUrl(query).href;
   if (mode === 'steam' && !/^[a-zA-Z0-9_-]{2,64}$/.test(query)) throw new Error('Enter a Steam vanity name or 17-digit Steam ID.');
   if (mode === 'discord') {
@@ -111,7 +112,7 @@ async function source(name, operation) {
       duration: Date.now() - start,
       results: [],
       message:
-        error.name === "TimeoutError"
+        error.publicMessage ? error.message : error.name === "TimeoutError"
           ? "Source timed out"
           : /HTTP (401|403)/.test(error.message) ? 'Provider denied access. Authentication or permission may be required.'
           : /HTTP 429/.test(error.message) ? 'Provider rate limit reached. Try again later.'
@@ -372,6 +373,7 @@ export async function runSearch(mode, query, env = process.env, tool = null, opt
     });
     add("RDAP", () => rdapLookup(domain, "domain"));
   }
+  if (mode === 'abuseipdb' || (mode === 'ip' && env.ABUSEIPDB_API_KEY?.trim())) add('AbuseIPDB', () => abuseipdbRecords(query, env.ABUSEIPDB_API_KEY));
   if (mode === "ip") {
     add("RDAP", () => rdapLookup(query, "ip"));
     add("Google DNS", async () => {
@@ -443,7 +445,9 @@ export async function runSearch(mode, query, env = process.env, tool = null, opt
     add("URLScan", async () => {
       const data = await json(
         `https://urlscan.io/api/v1/search/?q=${encodeURIComponent("domain:" + query)}&size=15`,
+        { headers: env.URLSCAN_API_KEY ? { "api-key": env.URLSCAN_API_KEY } : {} },
       );
+      if (!data || !Array.isArray(data.results)) throw new Error("Unexpected URLScan response");
       return (data?.results || []).map((d) =>
         result(
           "URLScan",

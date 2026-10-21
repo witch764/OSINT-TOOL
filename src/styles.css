@@ -2719,3 +2719,8 @@ input::placeholder {
 .provider-connection label { font-size: 13px; color: #bcadc9; }
 .provider-connection input { min-width: 0; width: 100%; height: 46px; padding: 0 12px; background: #100d16; color: #eee5f8; border: 1px solid #41324f; border-radius: 9px; }
 .provider-connection input:focus-visible { outline: 2px solid #bc92ff; outline-offset: 2px; }
+
+.search-form select { flex: 1; min-width: 0; background: #15101e; color: #ede4f7; border: 0; padding: 12px 4px; font: inherit; }
+.search-form select:focus-visible { outline: 2px solid #ad80f7; outline-offset: 2px; }
+
+.source-status time { color: #b9aec6; font-size: 10px; }

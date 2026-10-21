@@ -1,3 +1,5 @@
+import { OATHNET_TOOLS } from './oathnet.mjs';
+
 // Only concrete implementations are marked available. Indexed web searches state their coverage.
 export const TOOL_GROUPS = [
   {
@@ -439,9 +441,18 @@ export const TOOL_GROUPS = [
   }
 ];
 
+TOOL_GROUPS.push({ label: 'EXPOSURE & REPUTATION', tools: [
+  { id: 'account-exposure', name: 'Unified Account Exposure', mode: 'account-exposure', icon: 'shield', provider: 'OathNet / Have I Been Pwned', description: 'Check an approved account email across configured exposure providers. Each source reports its own status and evidence.' },
+  { id: 'abuseipdb', name: 'AbuseIPDB Reputation', mode: 'abuseipdb', icon: 'shield', provider: 'AbuseIPDB', requiredEnv: 'ABUSEIPDB_API_KEY', setupUrl: 'https://www.abuseipdb.com/account/api', description: 'Review community-reported reputation for a public IPv4 address. Does not submit abuse reports.', placeholder: 'Public IPv4 address…', example: '8.8.8.8' },
+] });
+TOOL_GROUPS.push({ label: 'OATHNET', tools: OATHNET_TOOLS });
+
 export const TOOLS = TOOL_GROUPS.flatMap(g => g.tools);
 export function toolAvailable(tool, env) {
   if (!tool.mode) return false;
+  if (tool.mode === 'account-exposure') return Boolean(env.OATHNET_API_KEY?.trim() || env.HIBP_API_KEY?.trim());
+  if (tool.mode === 'oathnet-infostealer') return Boolean(env.OATHNET_API_KEY?.trim() && env.OATHNET_INFOSTEALER_ENABLED === 'true');
+  if (tool.mode.startsWith('oathnet-')) return Boolean(env.OATHNET_API_KEY?.trim());
   if (tool.mode === 'vt-content') return Boolean(env.VIRUSTOTAL_API_KEY && env.VIRUSTOTAL_INTELLIGENCE_ENABLED === 'true');
   return !tool.requiredEnv || Boolean(env[tool.requiredEnv]);
 }

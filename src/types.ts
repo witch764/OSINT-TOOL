@@ -16,7 +16,7 @@ export type User = {
   createdAt: string;
 };
 export type Result = {
-  kind?: "unavailable";
+  kind?: "unavailable" | "exposure";
   source: string;
   title: string;
   url: string;
@@ -24,6 +24,7 @@ export type Result = {
   fields: { label: string; value: string }[];
 };
 export type Source = {
+  checkedAt?: string;
   name: string;
   status: "found" | "no_match" | "unavailable";
   duration: number;
@@ -34,7 +35,7 @@ export type Search = {
   id: string;
   mode: string;
   toolId?: string;
-  provider?: 'indicia';
+  provider?: 'indicia' | 'oathnet' | 'combined';
   options?: RobloxScanOptions;
   query: string;
   createdAt: string;

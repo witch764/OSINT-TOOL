@@ -83,9 +83,9 @@ export function extraSearch(add, mode, query, env, tool) {
     return d ? [result('Shodan InternetDB', d.ip, `https://www.shodan.io/host/${encodeURIComponent(query)}`, [field('Observed ports', array(d.ports).join(', ') || 'None listed'), field('Hostnames', array(d.hostnames).join(', ') || 'None listed'), field('CPEs', array(d.cpes).join(', ') || 'None listed'), field('Reported CVEs', array(d.vulns).join(', ') || 'None listed'), field('Tags', array(d.tags).join(', ') || 'None listed')], 'Existing public Shodan observations. Records may be stale; open ports and CVEs are not verified by WitchSearch.')] : [];
   });
   if (mode === 'ip') add('IPinfo', async () => {
-    const d = await json(`https://ipinfo.io/${encodeURIComponent(query)}/json`);
-    if (!d || d.error || !d.ip) throw new Error('IPinfo unavailable');
-    return [result('IPinfo', d.ip, `https://ipinfo.io/${encodeURIComponent(query)}`, [field('Organization', d.org), field('Country', d.country), field('Region', d.region), field('City', d.city), field('Approximate coordinates', d.loc), field('Timezone', d.timezone)], 'Approximate network location from IPinfo. It may reflect a VPN, hosting provider, or ISP location and cannot locate a person.')];
+    const d = await json(env.IPINFO_TOKEN ? `https://api.ipinfo.io/lite/${encodeURIComponent(query)}` : `https://ipinfo.io/${encodeURIComponent(query)}/json`, { headers: env.IPINFO_TOKEN ? { Authorization: `Bearer ${env.IPINFO_TOKEN}` } : {} });
+    if (!d || d.error || d.ip !== query) throw new Error('IPinfo unavailable');
+    return [result('IPinfo', d.ip, `https://ipinfo.io/${encodeURIComponent(query)}`, [field('Organization', d.org || d.as_name), field('ASN', d.asn), field('Country', d.country_code || d.country), field('Region', d.region), field('City', d.city), field('Approximate coordinates', d.loc), field('Timezone', d.timezone)], 'Approximate network location from IPinfo. It may reflect a VPN, hosting provider, or ISP location and cannot locate a person.')];
   });
   if (mode === 'phone') add('Phone numbering plan', async () => {
     const phone = parsePhoneNumberFromString(query);

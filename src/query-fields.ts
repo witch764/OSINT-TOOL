@@ -1,6 +1,11 @@
 import type { Tool } from './types';
 type QueryField = { label: string; type?: 'email' | 'url'; placeholder?: string };
 const fields: Record<string, QueryField> = {
+  abuseipdb: { label: 'Public IPv4 address' },
+  'oathnet-discord': { label: 'Discord user ID' },
+  'oathnet-roblox': { label: 'Roblox username or user ID' },
+  'oathnet-steam': { label: 'Steam vanity name or SteamID64' },
+  'oathnet-xbox': { label: 'Xbox gamertag or XUID' },
   username: { label: 'Username' },
   email: { label: 'Email address', type: 'email' },
   domain: { label: 'Domain name' },

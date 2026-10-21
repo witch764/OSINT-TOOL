@@ -134,3 +134,81 @@ The creator can open **Account settings → Indicia connection** to save or repl
 Connected tools offer an explicit **Use Indicia public data** checkbox: TikTok, Epic Games, PlayStation, Xbox, Steam, IP Info, Whois, Certificate Lookup, URLScan, CVE/KEV, Wayback snapshot listings, and Bitcoin wallet analysis. Public adapters remain the default. Indicia requests use fixed allowlisted endpoints, bounded responses, and no redirects. Provider calls have a 20-second deadline (the existing public adapters retain their 8-second default). Each request checks authenticated provider pricing and proceeds only when that endpoint is quoted at zero credits; changed or missing prices fail closed. The app still charges one WitchSearch credit for a healthy search and refunds total failure. Provider selection persists with saved reports and JSON exports.
 
 The integration is limited to public-data endpoints; it does not connect paid searches, breach/stealer credentials, verification bypass, or file downloads. Wayback never requests paid snapshot content. Real upstream availability varies independently of account permissions. Local unlimited WitchSearch credits do not fund an external provider's paid balance.
+
+## OathNet profiles and account exposure
+
+The **OATHNET** tool-directory group extends the existing site, login, credit reservation/refund, Cases, and JSON report export. Existing public and Indicia tools retain their current adapters. OathNet tools are optional and show a provider setup panel until configured. Configuration means credentials are present, not that upstream access has been verified.
+
+### Server configuration
+
+1. Obtain a key from [OathNet Dashboard → Account](https://oathnet.org/dashboard?tab=account). Confirm your subscription permits each intended endpoint and has sufficient quota. WitchSearch credits do not pay for OathNet quota.
+2. In **Netlify → Project configuration → Environment variables**, add **`OATHNET_API_KEY`**, mark it as secret, and give it **Functions** scope. For local development, put it in the ignored `.env`. Never use a `VITE_` prefix, paste it into the app, or commit it.
+3. Exposure checks additionally require **`EXPOSURE_APPROVED_EMAILS`** (or legacy `OATHNET_APPROVED_EMAILS` if the shared variable is unset) with **Functions** scope. Its value is JSON mapping an **existing WitchSearch login** to email addresses the operator has independently verified that account owns or is authorized to investigate. Example using synthetic addresses:
+
+   ```json
+   {"researcher":["owned@example.com"],"security_team":["authorized@example.org"]}
+   ```
+
+   Verify the existing login and the email owner's control or written investigation permission **before** granting access. Username/password signup does not verify email ownership. There is no browser self-approval or owner-role override. Do not approve an unregistered username that someone else could subsequently register. To revoke access, remove the address from this JSON and redeploy. Invalid JSON, a non-array value, invalid addresses, or more than 20 addresses for a login deny that login's exposure checks. Only that login can retrieve its approved address list. This integration does not send verification emails.
+4. **Infostealer Exposure Intelligence** also requires **`OATHNET_INFOSTEALER_ENABLED=true`**, with **Functions** scope. Set it only after confirming authorized access to OathNet's V2 stealer-search endpoint. The module is disabled by default and explains that API access is required. This switch does not bypass upstream permissions, quotas, or billing.
+5. Deploy again after changing server environment variables; restart `npm run dev` locally. Open the OATHNET group in the tool directory. Select an approved email for either exposure module. Public profile tools take a platform identifier instead.
+
+### Implemented API contracts
+
+Contracts were read from the [official documentation index](https://docs.oathnet.org/llms.txt) and [OpenAPI specification](https://docs.oathnet.org/openapi.yaml) on 2026-10-21. Older `/api-reference/endpoints/...` documentation links are superseded by the current documentation paths.
+
+| Feature | OathNet endpoint | Request and returned data |
+| --- | --- | --- |
+| Search session | `POST /api/service/search/init` | A fixed query/type payload; the returned `data.session.id` is passed as `search_id` to the lookup. |
+| Discord public profile | `GET /api/service/discord-userinfo` | `discord_id` (14–19 digits); ID, username, display name, creation date. |
+| Roblox public profile | `GET /api/service/roblox-userinfo` | Exact `username` or numeric `user_id`; ID, username, display name, join date. |
+| Steam public profile | `GET /api/service/steam` | `steam_id` (vanity name or SteamID64); ID, username, visibility when supplied. |
+| Xbox public profile | `GET /api/service/xbox` | `xbl_id` (gamertag/XUID); ID, gamertag, gamerscore, account tier when supplied. |
+| Account Exposure Check | `POST /api/service/v2/breach/search` | Server-approved exact email equality filter; `fields[]=email,dbname` as repeated parameters. Shows status, counts and source names. |
+| Infostealer Exposure Intelligence | `POST /api/service/v2/stealer/search` | Same approval and exact filter; projects `email`, `domain`, `pwned_at`, `indexed_at`. Shows status, affected domains, earliest/latest exposure timestamps, latest index timestamp and remediation advice. |
+
+The POST search contracts document the field projection; the simple GET breach route does not document `fields[]`, so exposure checks use POST. Requests go only to fixed `https://oathnet.org/api` paths with the lowercase `x-api-key` header. Caller-supplied provider paths, filters, headers, and result-field choices are never forwarded. Redirects fail, both session and lookup share an 18-second deadline, responses are capped at 1 MB, and there are no automatic retries.
+
+Exposure checks fetch one page of at most 100 records, verify every returned row belongs to the approved email, then construct a new summary from an explicit field allowlist. Infostealer rows containing more than one email are rejected rather than disclosing linked identities. Passwords, hashes, session cookies, tokens, raw URLs, logs, IPs, personal addresses, and unknown fields are neither returned nor stored in reports. Unexpected shapes or identity mismatches are **Unavailable**, never **No match**. Missing timestamps/domains are labeled unpublished. Summaries show provider totals, the number of rows checked, a partial-coverage notice when more pages exist, and a real check timestamp. No matches does not prove safety or absence of compromise. Saved reports and JSON exports contain the same sanitized summary.
+
+Provider failures show safe messages for invalid keys (401), access/plan/quota denial (403), missing resources (404), rate limits (429), timeouts, or invalid responses. They refund WitchSearch credits. A healthy check with no matches costs one WitchSearch credit. Persistent store-backed OathNet limits apply across all six tools: 5 attempts/minute/account, 10/minute/IP, and 60/minute/site, in addition to the existing search limit and concurrent credit reservations. In Netlify, the existing function supplies the client IP; local development uses the socket address.
+
+### Verification and deployment
+
+Run the repository's checks before publishing:
+
+```bash
+npm ci
+npm run check
+npm test
+npm run build
+npm audit
+```
+
+OathNet tests use **synthetic fixtures**, including credential-bearing provider payloads to verify secret removal, per-login authorization, disabled access, exact outbound requests, malformed responses, provider errors, refunds and rate limits. These tests do not establish successful live OathNet access. The current implementation has **not been verified with a real authorized OathNet key**. A site operator must perform that final check using an approved account and confirm actual provider quota and endpoint access; do not interpret an unavailable response as a clean exposure result. No fixture fallback exists in the deployed application.
+
+After committing the local changes and pushing the task branch to origin, deploy this implementation through the existing Git-connected Netlify site by selecting the branch containing these changes (`coderabbit/integrate-oathnet-search-apis/f90a50c3` for this task), or deploy from the checkout using the already documented Netlify CLI workflow. Keep the existing site, Blobs store, `netlify.toml`, `npm run build`, `dist`, and `netlify/functions` configuration. A frontend-only `dist` upload cannot deploy this integration. After deployment, check login, an existing public tool, OathNet profile lookup, an approved exposure check, and an unapproved check that must be rejected without spending credits. Existing accounts and reports remain in the same store. This task does not automatically publish to the live Netlify site.
+
+## Unified exposure and additional intelligence providers
+
+The unified search page now includes an **Exposure** tab. It checks each configured provider independently and shows provider attribution, per-source check times, clear unavailable states, and remediation advice. The **Unified Account Exposure** directory tool opens the same flow. Partial provider failure preserves successful results; only total provider failure refunds the WitchSearch credit. Existing username/public-profile, IP, domain, DNS and RDAP tools remain available.
+
+### Additional server variables and required access
+
+Set these with Netlify **Functions** scope (or in ignored local `.env`), then redeploy/restart. None may have a `VITE_` prefix.
+
+| Variable | Required access and behavior |
+| --- | --- |
+| `EXPOSURE_APPROVED_EMAILS` | Recommended shared approval mapping, using the same JSON/login verification rules above. Applies to both unified and individual OathNet exposure checks. Takes precedence over legacy `OATHNET_APPROVED_EMAILS`; an explicit `{}` revokes all approvals. If unset/empty, the legacy variable is used. Example: `{"researcher":["owned@example.com"]}`. |
+| `HIBP_API_KEY` | [Have I Been Pwned API subscription/key](https://haveibeenpwned.com/API/Key) permitting **email address search**. `GET /api/v3/breachedAccount/{email}?truncateResponse=false` uses `hibp-api-key` and the required WitchSearch User-Agent. HTTP 404 means no breach matches; 401/403/429 mean unavailable/access/quota errors. Only breach names, domains, counts and dates are shown, with no raw descriptions or records. Some sensitive/retired breaches are excluded by the provider; results are not exhaustive. A production key/subscription is required for real email checks. |
+| `ABUSEIPDB_API_KEY` | [Registered AbuseIPDB account API key](https://www.abuseipdb.com/account/api). Free plans provide limited daily checks; higher limits require an appropriate plan. Adds a dedicated **AbuseIPDB Reputation** tool and enriches unified IP search when configured. Calls only `GET https://api.abuseipdb.com/api/v2/check` with `Key`, `ipAddress`, `maxAgeInDays=90`. No report submission, verbose raw reports or bypass of provider quotas. |
+| `IPINFO_TOKEN` | Optional [IPinfo token](https://ipinfo.io/dashboard). Selects the documented `https://api.ipinfo.io/lite/{ip}` endpoint using `Authorization: Bearer …`; Lite returns country/ASN information and does not add city-level geolocation. Free Lite access requires an account/token; paid enrichment endpoints are not implemented. Without a token, the existing limited public IPinfo JSON lookup remains available. |
+| `URLSCAN_API_KEY` | Optional [URLScan API key](https://urlscan.io/user/profile/) sent in the documented `api-key` header for existing public scan searches. Anonymous public search remains available with lower limits. The app searches existing scans; it does not submit URLs for scanning or retrieve private scans. Subscription quotas still apply. |
+
+Official contracts were read from [HIBP API v3](https://haveibeenpwned.com/API/v3), [AbuseIPDB](https://docs.abuseipdb.com/), [URLScan](https://urlscan.io/docs/api/), and [IPinfo](https://ipinfo.io/developers). The pinned CodeRabbit emulator catalog does not provide these APIs or OathNet. Synthetic test fixtures are used only by the test runner; they never replace a production API response.
+
+OathNet infostealer metadata remains opt-in through `OATHNET_INFOSTEALER_ENABLED=true`, requires provider permission, and uses the same server-approved account emails. Unified exposure does not silently enable that endpoint when only a breach key is configured. The shared exposure rate limits apply to both the unified and individual OathNet tools. All other search modes retain the existing account search rate limit.
+
+### Observed verification for this change
+
+All 58 automated tests passed, along with TypeScript checking and the production build. The dependency audit reported zero vulnerabilities. Live public checks returned IPinfo, Shodan, DNS/RDAP and URLScan results; HIBP returned a valid summary using its documented synthetic integration-test account and public test key. No production account credentials were used. OathNet and AbuseIPDB requests were verified with synthetic contract/error fixtures and still require real authorized keys and endpoint permissions for successful live verification. Optional authenticated IPinfo Lite and URLScan calls were fixture-tested; their anonymous public paths were tested live.

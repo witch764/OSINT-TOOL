@@ -1,3 +1,4 @@
+import ExposureForm from './ExposureForm';
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -99,6 +100,7 @@ const icons: Record<string, typeof SearchIcon> = {
   folders: Folder,
 };
 const modes = [
+  { id: "account-exposure", name: "Exposure", icon: ShieldCheck },
   {
     id: "username",
     name: "Username",
@@ -508,6 +510,11 @@ function Workspace({
   function navigate(next: string) {
     setPage(next);
     setTool(null);
+    if (next === 'dashboard' || next === 'search') {
+      setMode('username');
+      setQuery('');
+      setUseIndicia(false);
+    }
     setActive(null);
     setError("");
     setMobile(false);
@@ -598,7 +605,7 @@ function Workspace({
   const example = tool?.example || currentMode?.example || extraExamples[mode] || "";
   const completed = history.filter((h) => h.status === "complete");
   const found = completed.reduce(
-    (sum, h) => sum + h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable").length, 0),
+    (sum, h) => sum + h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable" && r.kind !== "exposure").length, 0),
     0,
   );
   const selectedHistory =
@@ -709,9 +716,10 @@ function Workspace({
           </button>
         </span>
         <span>
-          <ShieldCheck size={12} /> Public sources only
+          <ShieldCheck size={12} /> Public profiles and sources
         </span>
       </div>
+      {mode.startsWith('oathnet-') && <p className="inline-note">OathNet plan permissions and quotas apply. A configured key does not guarantee endpoint access. Provider failures refund the WitchSearch credit.</p>}
       {mode === "email" && (
         <p className="inline-note">
           Email searches inspect the domain and public mentions. They don’t
@@ -1007,7 +1015,7 @@ function Workspace({
                   </div>
                 </div>
               )}
-              {tool?.mode === 'local-image' ? <ImageGeo /> : tool && !tool.available ? (
+              {tool?.mode === 'local-image' ? <ImageGeo /> : tool && !tool.available && !active ? (
                 <section className="connection-panel">
                   <span className="connection-icon">
                     <LockKeyhole size={27} />
@@ -1023,6 +1031,7 @@ function Workspace({
                     <strong>{tool.provider}</strong>
                     <span>Status</span>
                     <strong>{tool.mode ? 'Provider credentials required' : 'Backend integration not implemented'}</strong>
+                    {tool.mode === 'oathnet-infostealer' && <><span>Enable after obtaining API permission</span><strong>OATHNET_INFOSTEALER_ENABLED=true</strong></>}
                     {tool.requiredEnv && <><span>Netlify environment variable</span><strong>{tool.requiredEnv}</strong></>}
                     <span>Search cost</span>
                     <strong>No credits charged</strong>
@@ -1038,7 +1047,7 @@ function Workspace({
                 </section>
               ) : (
                 <>
-                  {tool?.mode === 'roblox-batch' ? <RobloxScanForm query={query} setQuery={setQuery} options={scanOptions} setOptions={setScanOptions} busy={busy} onSubmit={search} /> : searchPanel}
+                  {['account-exposure', 'oathnet-exposure', 'oathnet-infostealer'].includes(mode) ? <ExposureForm combined={mode === 'account-exposure'} onBack={!tool ? () => { setMode('username'); setQuery(''); setError(''); } : undefined} infostealer={tool?.mode === 'oathnet-infostealer'} query={query} setQuery={setQuery} busy={busy} onSubmit={search} /> : tool?.mode === 'roblox-batch' ? <RobloxScanForm query={query} setQuery={setQuery} options={scanOptions} setOptions={setScanOptions} busy={busy} onSubmit={search} /> : searchPanel}
                   {error && (
                     <div className="error-box search-error" role="alert">
                       {error}
@@ -1067,7 +1076,7 @@ function Workspace({
                               (n, s) => n + s.results.filter(r => r.kind !== "unavailable").length,
                               0,
                             )}{" "}
-                            records · {active.sources.length} sources checked ·{" "}
+                            {['account-exposure', 'oathnet-exposure', 'oathnet-infostealer'].includes(active.mode) ? 'summaries' : 'records'} · {active.sources.length} sources checked ·{" "}
                             {new Date(active.createdAt).toLocaleString()}
                           </p>
                         </div>
@@ -1089,6 +1098,8 @@ function Workspace({
                         </div>
                       </div>
                       {active.mode === 'roblox-batch' && active.options && <p className="inline-note">Scanned {active.options.count} consecutive IDs starting at {active.query}. Filters: {active.options.keywords || active.options.startsWith || active.options.endsWith || active.options.exactLength ? 'applied to usernames' : 'none'}. Missing directory entries are not proof of deletion.</p>}
+                      {active.provider === 'combined' && <p className="inline-note">Configured exposure providers are checked independently. Unavailable sources cannot establish that an account is safe.</p>}
+                      {active.provider === 'oathnet' && <p className="inline-note">Provider: OathNet. Exposure summaries cover approved email addresses only. Provider availability depends on your plan and quota.</p>}
                       {active.provider === 'indicia' && <p className="inline-note">Provider: Indicia public data. Reopening this report restores the provider selection.</p>}
                       <div className="source-statuses">
                         {active.sources.map((s) => (
@@ -1098,9 +1109,10 @@ function Workspace({
                           >
                             <span />
                             {s.name}
+                            {s.checkedAt && <time dateTime={s.checkedAt} title="Time WitchSearch checked this source">{new Date(s.checkedAt).toLocaleTimeString()}</time>}
                             <small>
                               {s.status === "found"
-                                ? `${s.results.filter(r => r.kind !== "unavailable").length} found`
+                                ? s.results.some(result => result.kind === "exposure") ? "Exposure found" : `${s.results.filter(r => r.kind !== "unavailable").length} found`
                                 : s.status === "no_match"
                                   ? "No match"
                                   : "Unavailable"}
@@ -1108,6 +1120,7 @@ function Workspace({
                           </span>
                         ))}
                       </div>
+                      {active.sources.filter(source => source.status === 'unavailable' && source.message).map(source => <p key={source.name} className="error-box" role="alert">{source.message}</p>)}
                       {active.sources.length > 1 && (
                         <div className="filter-row">
                           <button
@@ -1140,7 +1153,7 @@ function Workspace({
                               </span>
                               <span>
                                 {r.source}
-                                <small>{r.kind === "unavailable" ? "Unavailable ID" : "Public record"}</small>
+                                <small>{r.kind === "exposure" ? "Exposure summary" : r.kind === "unavailable" ? "Unavailable ID" : "Public record"}</small>
                               </span>
                               <a
                                 href={safeUrl(r.url)}
@@ -1168,7 +1181,7 @@ function Workspace({
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              View original source
+                              {r.kind === "exposure" ? "Read provider documentation" : "View original source"}
                               <ArrowUpRight size={13} />
                             </a>
                           </article>
@@ -1189,11 +1202,11 @@ function Workspace({
                           }
                         />
                       )}
-                      <div className="research-links">
+                      {!['account-exposure', 'oathnet-exposure', 'oathnet-infostealer'].includes(active.mode) && <div className="research-links">
                         <h3>Continue in the public sources</h3>
                         <p>These links open external searches or profile candidates. They are not verified matches and cost no extra credits.</p>
                         <div className="button-row">{researchLinks(active.mode, active.query, allTools.find(t => t.id === active.toolId)).map(link => <a key={link.name} className="secondary" href={link.url} target="_blank" rel="noopener noreferrer">{link.name}<ArrowUpRight size={14} /></a>)}</div>
-                      </div>
+                      </div>}
                       <p className="report-note">
                         <ShieldCheck size={13} /> A matching username is a lead,
                         not proof that accounts belong to the same person.
@@ -1237,7 +1250,7 @@ function Workspace({
                               </span>
                               <span className={`small-status ${h.status}`}>
                                 {h.status === "complete"
-                                  ? `${h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable").length, 0)} records`
+                                  ? `${h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable").length, 0)} ${["account-exposure", "oathnet-exposure", "oathnet-infostealer"].includes(h.mode) ? "summaries" : "records"}`
                                   : h.status}
                               </span>
                               <ChevronRight size={14} />
@@ -1579,7 +1592,7 @@ function Workspace({
             </p>
             <h3>Provider integrations</h3>
             <p>
-              Web search works without a key using a public search index. An optional Brave key adds another provider. Social tools search indexed pages; they cannot access private accounts. VirusTotal requires a provider key. Other locked tools still need backend integrations.
+              Web search works without a key using a public search index. An optional Brave key adds another provider. Social tools search indexed pages; they cannot access private accounts. VirusTotal requires a provider key. OathNet offers optional public profile lookups and exposure summaries for emails approved by the site owner. Other locked tools still need backend integrations.
             </p>
           </div>
         </Modal>
