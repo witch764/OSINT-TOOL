@@ -71,7 +71,7 @@ Results always come from the listed APIs. No demo results are used in production
 | Certificate Lookup | SSLMate Cert Spotter plus crt.sh certificate transparency records |
 | Wayback / URLScan | Nearest archived snapshot / existing public domain scan observations |
 | CVE / KEV | CVE Program records plus CISA Known Exploited Vulnerabilities membership and remediation details |
-| Ransomware Groups | Ransomware.live public group summaries; no stolen files |
+| Ransomware Groups | Ransomware.live public group summaries plus independent Malpedia family-catalog matches; no stolen files or malware samples |
 | Crypto Address Analyzer / App Store Search | Bitcoin balances/activity via Blockstream / published iOS app listings |
 | Forums Search | Hacker News story and comment search through Algolia |
 | Roblox / Roblox Profile Scraper | Public profile, joined date, description, friend/follower/following counts; individual fields may be restricted |

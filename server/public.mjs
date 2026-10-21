@@ -48,6 +48,7 @@ export async function webResults(query, env, { site, identifier } = {}) {
 
 let kevCache;
 let groupCache;
+let familyCache;
 const addressCache = new Map();
 export function extraSearch(add, mode, query, env, tool) {
   if (mode === 'username') {
@@ -139,6 +140,14 @@ export function extraSearch(add, mode, query, env, tool) {
     }
     const d = kevCache.data.vulnerabilities.find(v => v.cveID === query);
     return [result('CISA KEV', d?.vulnerabilityName || `${query}: not listed in KEV`, 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', [field('Listed as exploited', d ? 'Yes' : 'No entry in this catalog version'), field('Catalog version', kevCache.data.catalogVersion), ...(d ? [field('Vendor / product', `${d.vendorProject} / ${d.product}`), field('Date added', d.dateAdded), field('Remediation due', d.dueDate), field('Ransomware use', d.knownRansomwareCampaignUse), field('Required action', d.requiredAction)] : [])], d?.shortDescription || 'Absence from KEV does not mean a vulnerability is safe or unexploited.')];
+  });
+  if (mode === 'ransomware') add('Malpedia', async () => {
+    if (!familyCache || familyCache.expires < Date.now()) {
+      const data = await json('https://malpedia.caad.fkie.fraunhofer.de/api/list/families');
+      if (!Array.isArray(data) || !data.every(id => typeof id === 'string')) throw new Error('Unexpected malware catalog response');
+      familyCache = { data, expires: Date.now() + 3600000 };
+    }
+    return familyCache.data.filter(id => normalized(id).includes(normalized(query))).slice(0, 15).map(id => result('Malpedia', id, `https://malpedia.caad.fkie.fraunhofer.de/details/${encodeURIComponent(id)}`, [field('Record type', 'Malware family'), field('Catalog identifier', id), field('Platform', id.split('.')[0])], 'Public malware-family catalog match. A family name is not proof of threat-group attribution. Open the source for research and references; no malware samples are downloaded.'));
   });
   if (mode === 'ransomware') add('Ransomware.live', async () => {
     if (!groupCache || groupCache.expires < Date.now()) {

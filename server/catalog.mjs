@@ -206,7 +206,7 @@ export const TOOL_GROUPS = [
         "icon": "shield",
         "provider": "Threat intelligence provider",
         "mode": "ransomware",
-        "description": "Read public threat group summaries from Ransomware.live. Does not retrieve stolen files.",
+        "description": "Search public threat group summaries from Ransomware.live and related malware-family records from Malpedia. Does not retrieve stolen files or malware samples.",
         "example": "lockbit",
         "placeholder": "Enter a threat group name…"
       },

@@ -127,3 +127,15 @@ test('Roblox enrichment returns actual records even if optional count endpoints 
     assert.equal(data[0].results[0].fields.find(f=>f.label==='Joined').value, '2020-01-01');
   });
 });
+
+test('threat research retains independent public family records when the group API fails', async () => {
+  await withFetch(async url => String(url).includes('malpedia') ? new Response(JSON.stringify(['win.lockbit', 'elf.lockbit', 'win.other'])) : new Response('{}', { status: 503 }), async () => {
+    const sources = await runSearch('ransomware', 'lockbit', {});
+    assert.equal(sources.find(s=>s.name==='Ransomware.live').status, 'unavailable');
+    const fallback = sources.find(s=>s.name==='Malpedia');
+    assert.equal(fallback.status, 'found');
+    assert.equal(fallback.results.length, 2);
+    assert.equal(fallback.results[0].fields[0].value, 'Malware family');
+    assert.equal(fallback.results[0].url, 'https://malpedia.caad.fkie.fraunhofer.de/details/win.lockbit');
+  });
+});
