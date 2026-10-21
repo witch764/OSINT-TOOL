@@ -602,3 +602,24 @@ test('web and new tools run without a Brave key; missing VT credentials and malf
   assert.equal(r.status, 200);
   assert.equal(r.data.user.credits, 4);
 });
+
+test('batch scan options are validated before spending; normalized filters persist with saved reports', async () => {
+  let passedOptions;
+  const f = fixture(async (_mode, _query, _env, _tool, options) => { passedOptions = options; return structuredClone(goodSources); });
+  const member = await f.signup();
+  const request = options => f.request('/search', { mode: 'roblox-batch', toolId: 'roblox-scraper', query: '1', options }, member.cookie);
+  assert.equal((await request({count:1000000})).status, 400);
+  assert.equal((await request({count:10,showIds:'yes'})).status, 400);
+  assert.equal((await f.request('/search',{mode:'roblox-batch',query:'1'},member.cookie)).status,400);
+  assert.equal((await f.request('/auth/me',undefined,member.cookie)).data.user.credits,5);
+  const r = await request({ count: 3, keywords: '  rob  ', showIds: true });
+  assert.equal(r.status,200);
+  assert.equal(r.data.user.credits,4);
+  assert.equal(passedOptions.count,3);
+  assert.equal(passedOptions.keywords,'rob');
+  assert.deepEqual(r.data.search.options,passedOptions);
+  await f.request('/history/save',{id:r.data.search.id,saved:true},member.cookie);
+  const history = (await f.request('/history',undefined,member.cookie)).data.history;
+  assert.equal(history[0].saved,true);
+  assert.deepEqual(history[0].options,passedOptions);
+});

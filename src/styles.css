@@ -2690,3 +2690,23 @@ input::placeholder {
 .research-links { margin-top: 24px; padding: 20px; border: 1px solid #302538; border-radius: 12px; }
 .research-links h3 { margin: 0 0 8px; font-size: 15px; }
 .research-links p { color: #9a90a5; font-size: 13px; margin: 0 0 16px; }
+
+.query-label { display: block; color: #b9aec6; font-size: 12px; margin: 18px 0 8px; }
+.roblox-scan fieldset { padding: 0; border: 0; margin: 0; min-width: 0; }
+.roblox-scan label { display: flex; flex-direction: column; gap: 9px; color: #c5bbce; font-size: 13px; margin: 0 0 18px; min-width: 0; }
+.roblox-scan input:not([type=checkbox]) { width: 100%; min-width: 0; height: 48px; padding: 0 14px; color: #eee8f5; border: 1px solid #3b3046; border-radius: 9px; background: #100e15; font: inherit; }
+.roblox-scan input:focus-visible { outline: 2px solid #9b74d2; outline-offset: 2px; }
+.scan-inputs { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+.scan-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.scan-toggles { margin: 4px 0 18px; }
+.scan-toggles label { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; }
+.scan-toggles input { appearance: none; width: 42px; height: 25px; flex: 0 0 42px; border-radius: 20px; background: #45404d; position: relative; cursor: pointer; }
+.scan-toggles input::after { content: ''; position: absolute; top: 4px; left: 4px; width: 17px; height: 17px; border-radius: 50%; background: #eae5f0; transition: transform .15s; }
+.scan-toggles input:checked { background: #8250d3; }
+.scan-toggles input:checked::after { transform: translateX(17px); }
+.roblox-scan .primary { margin-top: 18px; justify-content: center; }
+@media (max-width: 480px) {
+  .scan-inputs { grid-template-columns: 1fr; gap: 0; }
+  .scan-filters { gap: 8px; }
+  .scan-filters input:not([type=checkbox]) { padding: 0 9px; }
+}

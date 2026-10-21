@@ -57,10 +57,12 @@ import {
   Zap,
 } from "lucide-react";
 import { api, errorText, exportSearch, safeUrl } from "./api";
-import type { Config, Payment, Search, Tool, User } from "./types";
+import type { Config, Payment, Search, Tool, User, RobloxScanOptions } from "./types";
 import "./styles.css";
 import { ImageGeo } from "./ImageGeo";
 import { researchLinks } from "./research";
+import { RobloxScanForm, defaultRobloxOptions } from "./RobloxScanForm";
+import { queryField } from "./query-fields";
 
 const icons: Record<string, typeof SearchIcon> = {
   database: Database,
@@ -455,6 +457,7 @@ function Workspace({
   const [tool, setTool] = useState<Tool | null>(null);
   const [mode, setMode] = useState("username");
   const [query, setQuery] = useState("");
+  const [scanOptions, setScanOptions] = useState<RobloxScanOptions>(defaultRobloxOptions);
   const [history, setHistory] = useState<Search[]>([]);
   const [active, setActive] = useState<Search | null>(null);
   const [busy, setBusy] = useState(false);
@@ -513,7 +516,8 @@ function Workspace({
     setMode(t.mode || "username");
     setActive(null);
     setError("");
-    setQuery("");
+    setQuery(t.mode === "roblox-batch" ? "1" : "");
+    setScanOptions(defaultRobloxOptions);
     setMobile(false);
   }
   function openReport(h: Search) {
@@ -526,6 +530,7 @@ function Workspace({
     );
     setMode(h.mode);
     setQuery(h.query);
+    setScanOptions(h.options || defaultRobloxOptions);
     setSourceFilter("all");
     setError("");
     setMobile(false);
@@ -542,6 +547,7 @@ function Workspace({
         mode,
         query,
         ...(tool ? { toolId: tool.id } : {}),
+        ...(mode === "roblox-batch" ? { options: scanOptions } : {}),
       });
       setActive(r.search);
       setUser(r.user);
@@ -583,10 +589,11 @@ function Workspace({
   const allTools = config.toolGroups.flatMap((g) => g.tools);
   const availableCount = allTools.filter((t) => t.available).length;
   const currentMode = modes.find((m) => m.id === mode);
+  const fieldInfo = queryField(mode, tool);
   const example = tool?.example || currentMode?.example || extraExamples[mode] || "";
   const completed = history.filter((h) => h.status === "complete");
   const found = completed.reduce(
-    (sum, h) => sum + h.sources.reduce((n, s) => n + s.results.length, 0),
+    (sum, h) => sum + h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable").length, 0),
     0,
   );
   const selectedHistory =
@@ -650,15 +657,21 @@ function Workspace({
           ))}
         </div>
       )}
+      <label className="query-label" htmlFor="tool-query">{fieldInfo.label}</label>
       <form onSubmit={search} className="search-form">
         <SearchIcon size={21} />
         <input
           ref={input}
-          aria-label="Search query"
+          id="tool-query"
+          type={fieldInfo.type || "text"}
+          autoCapitalize="none"
+          autoComplete="off"
+          spellCheck={false}
+          aria-label={fieldInfo.label}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
-            tool?.placeholder || currentMode?.placeholder ||
+            fieldInfo.placeholder || currentMode?.placeholder ||
             `Enter ${mode === "cve" ? "a CVE identifier" : mode === "crypto" ? "a Bitcoin address" : mode === "appstore" ? "an app or developer name" : "a domain"}…`
           }
           required
@@ -1019,7 +1032,7 @@ function Workspace({
                 </section>
               ) : (
                 <>
-                  {searchPanel}
+                  {tool?.mode === 'roblox-batch' ? <RobloxScanForm query={query} setQuery={setQuery} options={scanOptions} setOptions={setScanOptions} busy={busy} onSubmit={search} /> : searchPanel}
                   {error && (
                     <div className="error-box search-error" role="alert">
                       {error}
@@ -1045,7 +1058,7 @@ function Workspace({
                           </h2>
                           <p>
                             {active.sources.reduce(
-                              (n, s) => n + s.results.length,
+                              (n, s) => n + s.results.filter(r => r.kind !== "unavailable").length,
                               0,
                             )}{" "}
                             records · {active.sources.length} sources checked ·{" "}
@@ -1069,6 +1082,7 @@ function Workspace({
                           </button>
                         </div>
                       </div>
+                      {active.mode === 'roblox-batch' && active.options && <p className="inline-note">Scanned {active.options.count} consecutive IDs starting at {active.query}. Filters: {active.options.keywords || active.options.startsWith || active.options.endsWith || active.options.exactLength ? 'applied to usernames' : 'none'}. Missing directory entries are not proof of deletion.</p>}
                       <div className="source-statuses">
                         {active.sources.map((s) => (
                           <span
@@ -1079,7 +1093,7 @@ function Workspace({
                             {s.name}
                             <small>
                               {s.status === "found"
-                                ? `${s.results.length} found`
+                                ? `${s.results.filter(r => r.kind !== "unavailable").length} found`
                                 : s.status === "no_match"
                                   ? "No match"
                                   : "Unavailable"}
@@ -1096,7 +1110,7 @@ function Workspace({
                             All results
                           </button>
                           {active.sources
-                            .filter((s) => s.results.length)
+                            .filter((s) => s.results.filter(r => r.kind !== "unavailable").length)
                             .map((s) => (
                               <button
                                 key={s.name}
@@ -1119,7 +1133,7 @@ function Workspace({
                               </span>
                               <span>
                                 {r.source}
-                                <small>Public record</small>
+                                <small>{r.kind === "unavailable" ? "Unavailable ID" : "Public record"}</small>
                               </span>
                               <a
                                 href={safeUrl(r.url)}
@@ -1216,7 +1230,7 @@ function Workspace({
                               </span>
                               <span className={`small-status ${h.status}`}>
                                 {h.status === "complete"
-                                  ? `${h.sources.reduce((n, s) => n + s.results.length, 0)} records`
+                                  ? `${h.sources.reduce((n, s) => n + s.results.filter(r => r.kind !== "unavailable").length, 0)} records`
                                   : h.status}
                               </span>
                               <ChevronRight size={14} />

@@ -1,3 +1,13 @@
+export type RobloxScanOptions = {
+  count: number;
+  keywords: string;
+  startsWith: string;
+  endsWith: string;
+  exactLength: number | null;
+  includeUnavailable: boolean;
+  showIds: boolean;
+  showStatus: boolean;
+};
 export type User = {
   username: string;
   unlimited: boolean;
@@ -6,6 +16,7 @@ export type User = {
   createdAt: string;
 };
 export type Result = {
+  kind?: "unavailable";
   source: string;
   title: string;
   url: string;
@@ -23,6 +34,7 @@ export type Search = {
   id: string;
   mode: string;
   toolId?: string;
+  options?: RobloxScanOptions;
   query: string;
   createdAt: string;
   status: "complete" | "failed" | "pending";

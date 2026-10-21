@@ -74,7 +74,8 @@ Results always come from the listed APIs. No demo results are used in production
 | Ransomware Groups | Ransomware.live public group summaries plus independent Malpedia family-catalog matches; no stolen files or malware samples |
 | Crypto Address Analyzer / App Store Search | Bitcoin balances/activity via Blockstream / published iOS app listings |
 | Forums Search | Hacker News story and comment search through Algolia |
-| Roblox / Roblox Profile Scraper | Public profile, joined date, description, friend/follower/following counts; individual fields may be restricted |
+| Roblox | Public profile, joined date, description, friend/follower/following counts; individual fields may be restricted |
+| Roblox Profile Scraper | Scan 1–200 consecutive numeric IDs; case-insensitive literal keyword, prefix, suffix, and exact username-length filters; ID/status display controls; optional unavailable-ID rows; saved/exported reports include the filters. Uses the public Roblox directory API, without cookies. Missing IDs do not confirm deletion; unavailable rows are not counted as discovered profiles. |
 | Telegram | Public profile/channel preview by exact handle and indexed public mentions; no private messages or members |
 | Steam | Public Steam Community profile by vanity name or SteamID64 |
 | Discord | Public server invite preview and approximate member counts, not private user lookup |
@@ -117,3 +118,11 @@ npm audit
 Tests cover authentication, reserved account roles, session revocation, rate limiting, search validation, private reports, concurrent credit reservations, refunds, and payment delivery idempotency. API tests use an isolated memory store and synthetic source fixtures; production code never substitutes those fixtures for real data.
 
 Local JSON storage supports a single development process. Production uses strongly consistent Netlify Blobs reads and conditional writes. Back up production Blobs through Netlify before deleting the site or store. No deployment or live financial transaction is performed by the tests.
+
+## Screenshot control coverage
+
+The Roblox Profile Scraper has its own ID-range form: starting ID, amount, comma-separated keywords (match any), starts/ends with, exact username length, unavailable-ID inclusion, user ID display, status display, scan, save to Cases, and JSON export. Filters combine; name filters match usernames rather than display names. Literal filters do not run arbitrary regular expressions. A scan costs one credit regardless of returned profile count; total source failure refunds it. The 200-ID cap matches the provider's bulk request limit; this deployment does not promise a million-ID job. Private, deleted, or terminated account contents cannot be recovered.
+
+Other connected tools show the input appropriate to their implemented public adapter (domain, CVE, Bitcoin address, Steam ID, Discord invite, and so on). Social web tools search indexed public pages; they are not native private-account lookups.
+
+The supplied IntelX screenshots show storage IDs, provider-specific buckets, and stealer-log archives. Those require an authorized IntelX service integration and are not available through the current public-source implementation. No fake buckets or successful downloads are shown. Stolen-credential archives and Discord verification bypass are not implemented. Locked tools do not charge credits.

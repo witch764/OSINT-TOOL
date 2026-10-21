@@ -4,9 +4,10 @@ import { json, field, result } from './fetch.mjs';
 import { extraSearch, webResults } from './public.mjs';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { publicUrl } from './resolve.mjs';
+import { scanRoblox, validateRobloxScan } from './roblox-scan.mjs';
 
 export const MODES = [
-  "username",
+  "username", "roblox-batch",
   "email",
   "domain",
   "ip",
@@ -22,6 +23,7 @@ export function validateSearch(mode, value) {
   if (!MODES.includes(mode) || typeof value !== "string")
     throw new Error("Choose a valid search type.");
   const query = value.trim();
+  if (mode === 'roblox-batch') { validateRobloxScan(query, { count: 1 }); return String(Number(query)); }
   if (query.length < 2 || query.length > 160 || /[\x00-\x1f]/.test(query))
     throw new Error("Enter a search between 2 and 160 characters.");
   if (mode === "username" && !/^[a-zA-Z0-9_.-]{2,39}$/.test(query))
@@ -98,7 +100,7 @@ async function source(name, operation) {
     const results = await operation();
     return {
       name,
-      status: results.length ? "found" : "no_match",
+      status: results.some(row => row.kind !== "unavailable") ? "found" : "no_match",
       duration: Date.now() - start,
       results,
     };
@@ -226,12 +228,13 @@ async function readRdap(response) {
   }
   return JSON.parse(Buffer.concat(chunks).toString());
 }
-export async function runSearch(mode, query, env = process.env, tool = null) {
+export async function runSearch(mode, query, env = process.env, tool = null, options = {}) {
   const tasks = [];
   const add = (name, op) => {
     if (!tool?.sources || tool.sources.includes(name))
       tasks.push(source(name, op));
   };
+  if (mode === 'roblox-batch') add('Roblox Directory', () => scanRoblox(query, options));
   extraSearch(add, mode, query, env, tool);
   if (mode === "username") {
     const escaped = encodeURIComponent(query);

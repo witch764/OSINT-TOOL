@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { update } from "./store.mjs";
 import { runSearch, validateSearch } from "./search.mjs";
 import { TOOL_GROUPS, TOOLS, toolAvailable } from "./catalog.mjs";
+import { validateRobloxScan } from "./roblox-scan.mjs";
 
 const scrypt = promisify(rawScrypt);
 export const PACKAGES = [
@@ -302,8 +303,11 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         if (tool && tool.mode !== input.mode)
           fail(400, "Search type does not match this tool.");
         let query;
+        let options;
+        if (input.mode === 'roblox-batch' && tool?.id !== 'roblox-scraper') fail(400, 'Choose the Roblox Profile Scraper to run a batch scan.');
         try {
           query = validateSearch(input.mode, input.query);
+          if (input.mode === 'roblox-batch') options = validateRobloxScan(query, input.options);
         } catch (error) {
           fail(400, error.message);
         }
@@ -339,6 +343,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
             mode: input.mode,
             toolId: tool?.id,
             query,
+            ...(options ? { options } : {}),
             createdAt: timestamp,
             status: "pending",
             saved: false,
@@ -350,7 +355,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         let sources = [];
         let failed = false;
         try {
-          sources = await search(input.mode, query, env, tool);
+          sources = await search(input.mode, query, env, tool, options);
           failed =
             !sources.length || sources.every((s) => s.status === "unavailable");
         } catch {

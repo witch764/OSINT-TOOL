@@ -423,11 +423,11 @@ export const TOOL_GROUPS = [
         "id": "roblox-scraper",
         "name": "Roblox Profile Scraper",
         "icon": "folders",
-        "mode": "username",
+        "mode": "roblox-batch",
         "sources": [
-          "Roblox"
+          "Roblox Directory"
         ],
-        "description": "Read and export public Roblox profile details, join date, friend and follower counts. Individual fields may be restricted by Roblox."
+        "description": "Scan up to 200 consecutive Roblox IDs with username filters and optional ID/status fields. Include unavailable directory slots without assuming they are deleted. Save and export results."
       },
       {
         "id": "intelx",
