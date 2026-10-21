@@ -2683,3 +2683,10 @@ input::placeholder {
     animation-iteration-count: 1 !important;
   }
 }
+
+.image-picker { position: relative; display: inline-flex; margin: 12px 0 20px; cursor: pointer; }
+.image-picker input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.image-picker:focus-within { outline: 2px solid var(--accent, #a78bfa); outline-offset: 3px; }
+.research-links { margin-top: 24px; padding: 20px; border: 1px solid #302538; border-radius: 12px; }
+.research-links h3 { margin: 0 0 8px; font-size: 15px; }
+.research-links p { color: #9a90a5; font-size: 13px; margin: 0 0 16px; }

@@ -59,6 +59,8 @@ import {
 import { api, errorText, exportSearch, safeUrl } from "./api";
 import type { Config, Payment, Search, Tool, User } from "./types";
 import "./styles.css";
+import { ImageGeo } from "./ImageGeo";
+import { researchLinks } from "./research";
 
 const icons: Record<string, typeof SearchIcon> = {
   database: Database,
@@ -581,7 +583,7 @@ function Workspace({
   const allTools = config.toolGroups.flatMap((g) => g.tools);
   const availableCount = allTools.filter((t) => t.available).length;
   const currentMode = modes.find((m) => m.id === mode);
-  const example = currentMode?.example || extraExamples[mode] || "";
+  const example = tool?.example || currentMode?.example || extraExamples[mode] || "";
   const completed = history.filter((h) => h.status === "complete");
   const found = completed.reduce(
     (sum, h) => sum + h.sources.reduce((n, s) => n + s.results.length, 0),
@@ -656,7 +658,7 @@ function Workspace({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
-            currentMode?.placeholder ||
+            tool?.placeholder || currentMode?.placeholder ||
             `Enter ${mode === "cve" ? "a CVE identifier" : mode === "crypto" ? "a Bitcoin address" : mode === "appstore" ? "an app or developer name" : "a domain"}…`
           }
           required
@@ -980,18 +982,18 @@ function Workspace({
                     </h1>
                     <p>
                       {tool && !tool.available
-                        ? "Connect the required provider to activate this tool."
+                        ? "This integration is not connected yet."
                         : "Real sources. Useful context. All in one place."}
                     </p>
                   </div>
                 </div>
               )}
-              {tool && !tool.available ? (
+              {tool?.mode === 'local-image' ? <ImageGeo /> : tool && !tool.available ? (
                 <section className="connection-panel">
                   <span className="connection-icon">
                     <LockKeyhole size={27} />
                   </span>
-                  <span className="pill muted">PROVIDER REQUIRED</span>
+                  <span className="pill muted">{tool.mode ? "PROVIDER SETUP" : "NOT CONNECTED"}</span>
                   <h2>{tool.name}</h2>
                   <p>
                     {tool.description ||
@@ -1001,10 +1003,12 @@ function Workspace({
                     <span>Required integration</span>
                     <strong>{tool.provider}</strong>
                     <span>Status</span>
-                    <strong>Not connected</strong>
+                    <strong>{tool.mode ? 'Provider credentials required' : 'Backend integration not implemented'}</strong>
+                    {tool.requiredEnv && <><span>Netlify environment variable</span><strong>{tool.requiredEnv}</strong></>}
                     <span>Search cost</span>
                     <strong>No credits charged</strong>
                   </div>
+                  {tool.setupUrl && <a className="secondary" href={safeUrl(tool.setupUrl)} target="_blank" rel="noopener noreferrer">Open provider setup <ArrowUpRight size={15} /></a>}
                   <button
                     className="secondary"
                     onClick={() => navigate("directory")}
@@ -1164,6 +1168,11 @@ function Workspace({
                           }
                         />
                       )}
+                      <div className="research-links">
+                        <h3>Continue in the public sources</h3>
+                        <p>These links open external searches or profile candidates. They are not verified matches and cost no extra credits.</p>
+                        <div className="button-row">{researchLinks(active.mode, active.query, allTools.find(t => t.id === active.toolId)).map(link => <a key={link.name} className="secondary" href={link.url} target="_blank" rel="noopener noreferrer">{link.name}<ArrowUpRight size={14} /></a>)}</div>
+                      </div>
                       <p className="report-note">
                         <ShieldCheck size={13} /> A matching username is a lead,
                         not proof that accounts belong to the same person.
@@ -1435,7 +1444,7 @@ function Workspace({
                               className={`availability ${t.available ? "available" : ""}`}
                             >
                               <span />
-                              {t.available ? "Available" : "Provider required"}
+                              {t.available ? "Available" : t.mode ? "Provider setup" : "Not connected"}
                             </span>
                           </button>
                         );
@@ -1548,9 +1557,7 @@ function Workspace({
             </p>
             <h3>Provider integrations</h3>
             <p>
-              Locked tools need a separate authorized provider integration. Web
-              search can be enabled with a Brave Search API key in the site
-              configuration.
+              Web search works without a key using a public search index. An optional Brave key adds another provider. Social tools search indexed pages; they cannot access private accounts. VirusTotal requires a provider key. Other locked tools still need backend integrations.
             </p>
           </div>
         </Modal>

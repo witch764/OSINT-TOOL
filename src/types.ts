@@ -38,6 +38,11 @@ export type Tool = {
   provider?: string;
   description?: string;
   available: boolean;
+  example?: string;
+  placeholder?: string;
+  requiredEnv?: string;
+  setupUrl?: string;
+  site?: string;
 };
 export type Config = {
   packages: { id: string; name: string; credits: number; price: number }[];

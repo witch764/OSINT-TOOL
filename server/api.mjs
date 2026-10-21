@@ -183,7 +183,7 @@ export function createApi({ store, search = runSearch, env = process.env }) {
           })),
           packages: PACKAGES,
           cashapp: "$imhollowvf",
-          webSearch: Boolean(env.BRAVE_SEARCH_API_KEY),
+          webSearch: true,
           accessCodes: Boolean(env.OWNER_ACCESS_CODE || env.SLIT_ACCESS_CODE),
         });
       if (
@@ -307,11 +307,11 @@ export function createApi({ store, search = runSearch, env = process.env }) {
         } catch (error) {
           fail(400, error.message);
         }
-        if (input.mode === "web" && !env.BRAVE_SEARCH_API_KEY)
-          fail(
-            503,
-            "Web search needs a Brave Search API key. Username, domain, email-domain, and IP searches are available.",
-          );
+        if (['virustotal', 'vt-content'].includes(input.mode) && !env.VIRUSTOTAL_API_KEY)
+          fail(503, 'Add VIRUSTOTAL_API_KEY in Netlify to connect this provider.');
+        if (input.mode === 'vt-content' && env.VIRUSTOTAL_INTELLIGENCE_ENABLED !== 'true')
+          fail(503, 'VirusTotal Intelligence requires a subscription and VIRUSTOTAL_INTELLIGENCE_ENABLED=true.');
+        if (input.mode === 'address') await rate(store, 'provider:nominatim', 1, 1000);
         await rate(store, `search:${account.username}`, 20, 60000);
         const id = randomUUID();
         const timestamp = new Date().toISOString();

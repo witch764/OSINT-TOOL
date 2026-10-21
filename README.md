@@ -29,12 +29,14 @@ Open **http://localhost:3000**. Local development stores accounts, password hash
    | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
    | `OWNER_ACCESS_CODE`    | Set this to the requested private creator code. Opens `creator`, with unlimited credits and payment review access. |
    | `SLIT_ACCESS_CODE`     | Set this to the requested second private code. Opens `slit`, with unlimited credits and no payment review access.  |
-   | `BRAVE_SEARCH_API_KEY` | Optional. Enables Web Databases, Live Intelligence, and web enrichment.                                            |
+   | `BRAVE_SEARCH_API_KEY` | Optional. Prefers Brave Search; public web search works without this key.                                            |
+
+   Optional VirusTotal reports require `VIRUSTOTAL_API_KEY`. Intelligence search also requires a paid subscription and `VIRUSTOTAL_INTELLIGENCE_ENABLED=true`. These variables must also have Functions scope.
 
    The requested codes are configured in the current sandbox’s private `.env`. They are deliberately excluded from source archives and the browser bundle. Enter the same codes in Netlify. Do not prefix these variables with `VITE_`; they belong exclusively on the server. If both codes match, creator takes precedence, so use distinct values.
 
 4. Deploy. Netlify Blobs is accessed through the function’s built-in site context; no database URL or manually copied Netlify token is required. The site needs a Netlify plan with Functions and Blobs available. Accounts persist across deploys of the same site, including deploy previews; use a separate site for isolated test data.
-5. On the deployed site, create a normal account, log out, log back in, and run a search. Check the `creator` account and the **Payment requests** page. Confirm these checks before accepting real purchases. Production-hosted Blobs has not been exercised from this local sandbox.
+5. On the deployed site, create a normal account, log out, log back in, and run a search. Check the `creator` account and the **Payment requests** page. Confirm these checks before accepting real purchases. Accounts, sessions, saved reports, and credit changes were verified on the connected WitchSearch Netlify site.
 
 Alternatively, after linking a site with the Netlify CLI, use `netlify deploy --build --prod` from the project root. Configure the variables above in the site before deploying. No Netlify account or live payment account is connected by this repository alone.
 
@@ -55,24 +57,36 @@ Alternatively, after linking a site with the Netlify CLI, use `netlify deploy --
 
 Results always come from the listed APIs. No demo results are used in production. Profile matches are leads, not proof that accounts belong to one person. The tool directory labels each entry’s actual connection status.
 
-| Tool                                                              | Implementation                                                                                                                                                                                   |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Unified username search                                           | GitHub, GitLab, Hacker News, Roblox, and Reddit public profiles                                                                                                                                  |
-| GitHub / Forums Search / Roblox / Roblox Profile Scraper / Reddit | Source-specific profile queries; JSON export. Forums Search currently covers Hacker News. Roblox scraper currently exports public profile identifiers, not a complete inventory or friend graph. |
-| Email Search / Gmail Lookup                                       | DNS and registration data for the email’s domain, plus public web mentions if Brave is configured. Does not verify mailbox existence, reveal a mailbox owner, or access messages.                |
-| Whois / DNS Recon                                                 | IANA-discovered RDAP registry data; public A, AAAA, MX, NS, TXT records via Google DNS                                                                                                           |
-| IP Info                                                           | Public IPv4 registration and reverse DNS. No precise person/device location. IPv6 is not supported yet.                                                                                          |
-| Certificate Lookup                                                | crt.sh certificate transparency records, up to 30 returned records                                                                                                                               |
-| Wayback Machine                                                   | Nearest public archived snapshot                                                                                                                                                                 |
-| URLScan                                                           | Up to 15 existing public observations; does not submit scans                                                                                                                                     |
-| CVE / KEV                                                         | Published CVE Program records. KEV enrichment is not connected.                                                                                                                                  |
-| Crypto Address Analyzer                                           | Bitcoin mainnet confirmed balance and transaction counts through Blockstream. Other chains and identity attribution are not supported.                                                           |
-| App Store Search                                                  | Up to 12 public iOS application listings                                                                                                                                                         |
-| Web Databases / Live Intelligence                                 | Brave Search, when `BRAVE_SEARCH_API_KEY` is set                                                                                                                                                 |
+| Tool | Actual coverage |
+| --- | --- |
+| Unified username search | GitHub, GitLab, Hacker News, Roblox, Reddit, Chess.com, Lichess, DEV Community, and indexed public web mentions |
+| Web Databases / Live Intelligence / Person Search | DuckDuckGo public index; optional Brave Search with public-index fallback. Person Search finds indexed mentions, not private background reports. |
+| LinkedIn / TikTok / Instagram / Xbox / PlayStation / Epic Games | Public web results restricted to the platform domain. These are indexed-page searches, not native platform APIs; unindexed accounts may not appear. |
+| Gmail / Email Search | Domain DNS/RDAP and exact public web mentions. Does not verify a mailbox or its owner. |
+| Phone Search | International numbering plan, country, number type, and public web mentions. No subscriber records or live tracking. |
+| Address Search | OpenStreetMap/Nominatim place lookup, coordinates, and map links. No resident records. Site-wide one-request-per-second limit and bounded in-process cache. © OpenStreetMap contributors, ODbL. |
+| Court Records | CourtListener public US court opinions, with filing dates, court, docket, and source links. Does not cover every court or record type. |
+| Whois / DNS Recon | Authoritative RDAP and public A, AAAA, MX, NS, TXT records |
+| IP Info / Shodan | Public IPv4 allocation, reverse DNS, approximate IPinfo location, and Shodan InternetDB observations. No active scans or exact person location. |
+| Certificate Lookup | SSLMate Cert Spotter plus crt.sh certificate transparency records |
+| Wayback / URLScan | Nearest archived snapshot / existing public domain scan observations |
+| CVE / KEV | CVE Program records plus CISA Known Exploited Vulnerabilities membership and remediation details |
+| Ransomware Groups | Ransomware.live public group summaries; no stolen files |
+| Crypto Address Analyzer / App Store Search | Bitcoin balances/activity via Blockstream / published iOS app listings |
+| Forums Search | Hacker News story and comment search through Algolia |
+| Roblox / Roblox Profile Scraper | Public profile, joined date, description, friend/follower/following counts; individual fields may be restricted |
+| Telegram | Public profile/channel preview by exact handle and indexed public mentions; no private messages or members |
+| Steam | Public Steam Community profile by vanity name or SteamID64 |
+| Discord | Public server invite preview and approximate member counts, not private user lookup |
+| Link Resolver | HTTP redirect chain, with private/reserved IP rejection, per-hop DNS checks, and pinned connections. No scripts or login redirects. |
+| Image Geolocation | Free, on-device EXIF/GPS extraction and map link. The image is not uploaded. Cannot infer location from scenery; metadata can be absent or altered. |
+| VirusTotal | Existing domain/IP/file-hash reports with `VIRUSTOTAL_API_KEY`. Intelligence queries also require an appropriate subscription and `VIRUSTOTAL_INTELLIGENCE_ENABLED=true`. No files are uploaded or downloaded. |
 
-The remaining screenshot entries—face search, image geolocation, Hudson Rock, Horus, phone/address/person/court search, cell towers, Shodan, AI assistants, Wi-Fi/BSSID, VirusTotal tools, ransomware groups, Telegram, link resolution, LinkedIn, Discord, TikTok, Instagram, Xbox, PlayStation, Epic Games, Steam, and IntelX—are **catalog entries awaiting real provider implementations and authorization**, not working integrations that become enabled by supplying an arbitrary key. Their screens explain the missing provider and charge no credits. Double Counter Bypass is not implemented.
+35 catalog tools have implementations usable without provider keys, including the on-device image tool. Availability means an adapter exists, not that an upstream source guarantees a match or uptime. Public indexes can rate limit or show challenges; these responses are reported as unavailable, never fabricated results. Total source failure refunds the credit; a healthy no-match search costs one credit. Adding a Brave key can improve public search reliability. All results link to their source and should be verified there. Reports also offer free external research links and clearly labeled unverified profile candidates so research can continue when an index blocks server requests.
 
-Public APIs may block cloud traffic, rate limit requests, return no matches, or go down. The app reports each source separately and refunds searches when all sources fail. In sandbox verification, GitHub, Roblox, Hacker News, DNS, RDAP, Wayback, URLScan, CVE, App Store, and Blockstream returned records. Reddit blocked cloud requests; crt.sh returned a gateway error. These providers are not under the application’s control.
+Reverse Face Search, Hudson Rock, Horus, Cell Tower, AI Infra/Witch AI, Wi-Fi/BSSID, VirusTotal Downloader, and IntelX Downloader still lack backend implementations. They are labeled **Not connected** and charge no credits. Their providers need separate access, supported APIs, and backend work; entering an arbitrary key cannot activate them. Double Counter Bypass is not implemented. Sherlock, Maigret, Amass, theHarvester, SpiderFoot, and recon-ng are external command-line projects, not drop-in Netlify APIs. OSINT Framework and similar directories are resource lists.
+
+The optional VirusTotal adapter has fixture-based parsing and credential-gate tests; a real account/key is required for live verification. The pinned emulator catalog has no matching VirusTotal or search-index service. No emulator is substituted for live providers in production.
 
 ## Credit purchases and Cash App
 

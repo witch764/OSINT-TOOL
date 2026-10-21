@@ -181,11 +181,6 @@ test("five searches consume five credits; unauthenticated, invalid, and locked s
     400,
   );
   assert.equal(
-    (await f.request("/search", { mode: "web", query: "example" }, user.cookie))
-      .status,
-    503,
-  );
-  assert.equal(
     (
       await f.request(
         "/search",
@@ -585,4 +580,25 @@ test("report retention keeps 50 unsaved reports and preserves saved cases", asyn
   assert.equal(history.filter((h) => !h.saved).length, 50);
   assert.ok(history.some((h) => h.id === "saved-case"));
   assert.ok(!history.some((h) => h.id === "old-49"));
+});
+
+test('web and new tools run without a Brave key; missing VT credentials and malformed inputs do not charge', async () => {
+  const f = fixture();
+  const user = await f.signup();
+  const config = (await f.request('/config')).data;
+  assert.equal(config.webSearch, true);
+  const tools = config.toolGroups.flatMap(g => g.tools);
+  assert.equal(tools.find(t => t.id === 'web').available, true);
+  assert.equal(tools.find(t => t.id === 'virustotal').available, false);
+  for (const [mode, query, toolId, status] of [
+    ['virustotal', 'example.com', 'virustotal', 503],
+    ['phone', 'not a number', 'phone', 400],
+    ['link', 'http://169.254.169.254/', 'link', 400],
+    ['web', 'example', 'github', 400],
+    ['local-image', 'example', 'image-geo', 400],
+  ]) assert.equal((await f.request('/search', { mode, query, toolId }, user.cookie)).status, status);
+  assert.equal((await f.request('/auth/me', undefined, user.cookie)).data.user.credits, 5);
+  const r = await f.request('/search', { mode: 'web', query: 'public research', toolId: 'web' }, user.cookie);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.user.credits, 4);
 });

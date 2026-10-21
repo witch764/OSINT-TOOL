@@ -1,5 +1,9 @@
 import { isIP } from "node:net";
 import { domainToASCII } from "node:url";
+import { json, field, result } from './fetch.mjs';
+import { extraSearch, webResults } from './public.mjs';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import { publicUrl } from './resolve.mjs';
 
 export const MODES = [
   "username",
@@ -12,7 +16,7 @@ export const MODES = [
   "urlscan",
   "cve",
   "appstore",
-  "crypto",
+  "crypto", "phone", "address", "court", "shodan", "steam", "discord", "link", "forums", "ransomware", "virustotal", "vt-content",
 ];
 export function validateSearch(mode, value) {
   if (!MODES.includes(mode) || typeof value !== "string")
@@ -67,48 +71,27 @@ export function validateSearch(mode, value) {
     )
   )
     throw new Error("Enter a Bitcoin mainnet address.");
+  if (mode === 'phone') {
+    const phone = parsePhoneNumberFromString(query);
+    if (!phone?.isValid()) throw new Error('Enter a valid phone number with country code, for example +1 202 555 0123.');
+    return phone.number;
+  }
+  if (mode === 'shodan') return validateSearch('ip', query);
+  if (mode === 'link') return publicUrl(query).href;
+  if (mode === 'steam' && !/^[a-zA-Z0-9_-]{2,64}$/.test(query)) throw new Error('Enter a Steam vanity name or 17-digit Steam ID.');
+  if (mode === 'discord') {
+    const code = query.replace(/^https:\/\/(?:discord\.gg\/|discord\.com\/invite\/)/i, '');
+    if (!/^[a-zA-Z0-9_-]{2,100}$/.test(code)) throw new Error('Enter a public Discord invite code or discord.gg link.');
+    return code;
+  }
+  if (mode === 'virustotal') {
+    if (/^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$/i.test(query)) return query.toLowerCase();
+    if (isIP(query)) return validateSearch('ip', query);
+    return validateSearch('domain', query);
+  }
   return mode === "cve" ? query.toUpperCase() : query;
 }
 
-async function json(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    redirect: "error",
-    signal: AbortSignal.timeout(6500),
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "WitchSearch/1.0 (public-source-research)",
-      ...options.headers,
-    },
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
-  const reader = response.body.getReader();
-  let size = 0;
-  const chunks = [];
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > 1_000_000) throw new Error("Source response exceeded limit");
-      chunks.push(Buffer.from(value));
-    }
-  } finally {
-    await reader.cancel();
-  }
-  return JSON.parse(Buffer.concat(chunks).toString());
-}
-const short = (value) =>
-  value == null ? "Not published" : String(value).slice(0, 1500);
-const field = (label, value) => ({ label, value: short(value) });
-const result = (source, title, url, fields, description = "") => ({
-  source,
-  title: short(title),
-  url,
-  fields,
-  description: short(description),
-});
 async function source(name, operation) {
   const start = Date.now();
   try {
@@ -128,7 +111,10 @@ async function source(name, operation) {
       message:
         error.name === "TimeoutError"
           ? "Source timed out"
-          : "Source unavailable or rate limited",
+          : /HTTP (401|403)/.test(error.message) ? 'Provider denied access. Authentication or permission may be required.'
+          : /HTTP 429/.test(error.message) ? 'Provider rate limit reached. Try again later.'
+          : /HTTP 5\d\d/.test(error.message) ? 'Provider is temporarily unavailable.'
+          : 'Source unavailable. Try again later.',
     };
   }
 }
@@ -246,6 +232,7 @@ export async function runSearch(mode, query, env = process.env, tool = null) {
     if (!tool?.sources || tool.sources.includes(name))
       tasks.push(source(name, op));
   };
+  extraSearch(add, mode, query, env, tool);
   if (mode === "username") {
     const escaped = encodeURIComponent(query);
     add("GitHub", async () => {
@@ -310,15 +297,24 @@ export async function runSearch(mode, query, env = process.env, tool = null) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ usernames: [query], excludeBannedUsers: true }),
       });
-      return (d?.data || []).map((u) =>
-        result(
+      const users = d?.data || [];
+      return Promise.all(users.map(async (u) => {
+        const [profile, friends, followers, following] = await Promise.allSettled([
+          json(`https://users.roblox.com/v1/users/${u.id}`),
+          json(`https://friends.roblox.com/v1/users/${u.id}/friends/count`),
+          json(`https://friends.roblox.com/v1/users/${u.id}/followers/count`),
+          json(`https://friends.roblox.com/v1/users/${u.id}/followings/count`),
+        ]);
+        const p = profile.status === 'fulfilled' ? profile.value : null;
+        const count = item => item.status === 'fulfilled' ? item.value?.count : undefined;
+        return result(
           "Roblox",
           u.displayName || u.name,
           `https://www.roblox.com/users/${u.id}/profile`,
-          [field("Username", u.name), field("User ID", u.id)],
-          "Public Roblox profile.",
-        ),
-      );
+          [field("Username", u.name), field("User ID", u.id), field('Joined', p?.created), field('Verified badge', p?.hasVerifiedBadge), field('Friends', count(friends)), field('Followers', count(followers)), field('Following', count(following))],
+          p?.description || "Public Roblox profile. Additional fields may be unavailable if the provider limits requests.",
+        );
+      }));
     });
 
     add("Reddit", async () => {
@@ -531,25 +527,9 @@ export async function runSearch(mode, query, env = process.env, tool = null) {
           ]
         : [];
     });
-  if (
-    env.BRAVE_SEARCH_API_KEY &&
-    (!tool?.sources || tool.sources.includes("Brave Web"))
-  ) {
-    add("Brave Web", async () => {
-      const d = await json(
-        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(mode === "web" ? query : `"${query}"`)}&count=10`,
-        { headers: { "X-Subscription-Token": env.BRAVE_SEARCH_API_KEY } },
-      );
-      return (d?.web?.results || []).map((r) =>
-        result(
-          "Brave Web",
-          r.title,
-          r.url,
-          [],
-          r.description?.replace(/<[^>]*>/g, "") || "",
-        ),
-      );
-    });
+  if (['username', 'email', 'domain', 'ip', 'web', 'phone'].includes(mode)) {
+    const searchQuery = tool?.site ? `site:${tool.site} "${query.replaceAll('"', '')}"` : mode === 'web' ? query : `"${query}"`;
+    add('Public Web', () => webResults(searchQuery, env, { site: tool?.site, identifier: mode === 'web' && !tool?.site ? null : query }));
   }
   return Promise.all(tasks);
 }
